@@ -39,7 +39,7 @@ module SqliteMagic
     end
 
     def execute(query,data=nil)
-      raw_response = database.execute2(query, data)
+      raw_response = data ? database.execute2(query, data) : database.execute2(query)
       keys = raw_response.shift # get the keys
       raw_response.map{|e| Hash[keys.zip(e)] }
     end

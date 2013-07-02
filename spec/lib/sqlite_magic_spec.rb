@@ -79,6 +79,14 @@ describe SqliteMagic do
           @connection.execute('some query',[:foo]).should == []
         end
       end
+
+      context 'and nil passed as second argument' do
+        it "should not pass bind vars to #execute2" do
+          @dummy_db.should_receive(:execute2).with('some query')
+
+          @connection.execute('some query',nil)
+        end
+      end
     end
 
     describe '#save_data' do
