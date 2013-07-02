@@ -27,9 +27,14 @@ describe SqliteMagic do
         connection.should be_kind_of SqliteMagic::Connection
       end
 
-      it "should open up a new Sqlite3 database" do
-        SQLite3::Database.should_receive(:new).and_return(@dummy_db)
+      it "should open up a Sqlite3 database with default name" do
+        SQLite3::Database.should_receive(:new).with('sqlite.db').and_return(@dummy_db)
         connection = SqliteMagic::Connection.new
+      end
+
+      it "should use given db_name when setting up Sqlite3" do
+        SQLite3::Database.should_receive(:new).with('path/to/mynew.db').and_return(@dummy_db)
+        connection = SqliteMagic::Connection.new('path/to/mynew.db')
       end
 
       it "should store Sqlite3 database in @database instance variable" do
@@ -278,6 +283,20 @@ describe SqliteMagic do
         ENV["VERBOSE"] = 'foo'
         @connection.verbose?.should be_true
         ENV["VERBOSE"] = nil # reset
+      end
+    end
+
+    describe '#close' do
+      it 'should close database' do
+        @dummy_db.should_receive(:close)
+        @connection.close
+      end
+    end
+
+    describe '#commit' do
+      it 'should send commit to database' do
+        @dummy_db.should_receive(:commit)
+        @connection.commit
       end
     end
   end

@@ -11,8 +11,8 @@ module SqliteMagic
 
   class Connection
     attr_reader :database
-    def initialize(db_loc=nil)
-      @database = SQLite3::Database.new
+    def initialize(db_loc='sqlite.db')
+      @database = SQLite3::Database.new(db_loc)
     end
 
     def add_columns(tbl_name, col_names)
@@ -21,6 +21,14 @@ module SqliteMagic
       missing_cols.each do |col_name|
         database.execute("ALTER TABLE #{tbl_name} ADD COLUMN #{col_name}")
       end
+    end
+
+    def close
+      database.close
+    end
+
+    def commit
+      database.commit
     end
 
     def create_table(tbl_name, col_names, unique_keys=nil)
