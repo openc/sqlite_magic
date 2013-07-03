@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ["info@opencorporates.com"]
   spec.description   = %q{Sprinkles some magic onto Sqlite3 gem. Sort of extracted from Scraperwiki gem}
   spec.summary       = %q{Sprinkles some magic onto Sqlite3 gem}
-  spec.homepage      = ""
+  spec.homepage      = "https://github.com/openc/sqlite_magic"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files`.split($/)
