@@ -42,6 +42,14 @@ module SqliteMagic
       raw_response = data ? database.execute2(query, data) : database.execute2(query)
       keys = raw_response.shift # get the keys
       raw_response.map{|e| Hash[keys.zip(e)] }
+    rescue SQLite3::SQLException => e
+      puts "Exception (#{e.inspect}) raised" if verbose?
+      case e.message
+      when /no such table/
+        raise NoSuchTable.new(e.message)
+      else
+        raise e
+      end
     end
 
     # This is an (expensive) convenience method to insert a row (for given unique keys), or if the row already exists

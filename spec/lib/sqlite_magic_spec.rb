@@ -87,6 +87,29 @@ describe SqliteMagic do
           @connection.execute('some query',nil)
         end
       end
+
+      context 'and table does not exist' do
+        before do
+          @dummy_db.stub(:execute2).
+                      and_raise(SQLite3::SQLException.new("no such table: foo_table") )
+        end
+
+        it 'should raise NoSuchTable exception' do
+          lambda { @connection.execute('some query') }.should raise_error(SqliteMagic::NoSuchTable)
+        end
+      end
+
+      context 'and other SQLite3 error raised' do
+        before do
+          @other_ex = SQLite3::SQLException.new("something else went wrong")
+          @dummy_db.stub(:execute2).
+                      and_raise(@other_ex)
+        end
+
+        it 'should raise exception' do
+          lambda { @connection.execute('some query') }.should raise_error(@other_ex)
+        end
+      end
     end
 
     describe '#save_data' do
