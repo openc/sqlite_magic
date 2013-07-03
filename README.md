@@ -9,7 +9,7 @@ you. Developed and tested on Ruby 1.9.3
 
 Add this line to your application's Gemfile:
 
-    gem 'sqlite_magic'
+    gem 'sqlite_magic', :git => 'git@github.com:openc/sqlite_magic.git'
 
 And then execute:
 
