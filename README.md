@@ -1,5 +1,5 @@
 # SqliteMagic
-
+[![Build Status](https://travis-ci.org/openc/sqlite_magic.png)](https://travis-ci.org/openc/sqlite_magic)
 Experimental abstraction and refactoring of sqlite utility methods from 
 scraperwiki-ruby gem
 Note: Not all functionality has yet been duplicated, and this may not work for
