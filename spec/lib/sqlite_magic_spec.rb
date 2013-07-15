@@ -16,7 +16,7 @@ describe SqliteMagic do
 
   describe SqliteMagic::Connection do
     before do
-      @dummy_db = stub('dummy_sqlite3_database')
+      @dummy_db = double('dummy_sqlite3_database')
       SQLite3::Database.stub(:new).and_return(@dummy_db)
       @connection = SqliteMagic::Connection.new
     end
