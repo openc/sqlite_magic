@@ -256,10 +256,10 @@ describe SqliteMagic do
 
       context 'and no table name given' do
         before do
-          @expected_query = "INSERT INTO ocdata (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+          @expected_query = "INSERT INTO main_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
         end
 
-        it 'should use ocdata table by default' do
+        it 'should use main_table table by default' do
           @dummy_db.should_receive(:execute).with(@expected_query, @datum)
           @connection.insert_or_update(@unique_keys, @datum)
         end
@@ -277,10 +277,10 @@ describe SqliteMagic do
         end
         context 'and no table name given' do
           before do
-            @expected_update_query = "UPDATE ocdata SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE main_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
           end
 
-          it 'should use ocdata table by default' do
+          it 'should use main_table table by default' do
             @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
             @connection.insert_or_update(@unique_keys, @datum)
           end

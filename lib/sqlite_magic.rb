@@ -54,7 +54,7 @@ module SqliteMagic
 
     # This is an (expensive) convenience method to insert a row (for given unique keys), or if the row already exists
     #
-    def insert_or_update(uniq_keys, values_hash, tbl_name='ocdata')
+    def insert_or_update(uniq_keys, values_hash, tbl_name='main_table')
       field_names_as_symbol_string = values_hash.keys.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
 
       sql_statement = "INSERT INTO #{tbl_name} (#{values_hash.keys.join(',')}) VALUES (#{field_names_as_symbol_string})"
