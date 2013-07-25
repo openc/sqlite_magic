@@ -23,6 +23,9 @@ Or install it yourself as:
 
 TODO: Write usage instructions here
 
+## Changes
+Allow options to be passed when initializing connection (which will be passed to Sqlite)
+
 ## Contributing
 
 1. Fork it

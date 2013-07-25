@@ -11,8 +11,8 @@ module SqliteMagic
 
   class Connection
     attr_reader :database
-    def initialize(db_loc='sqlite.db')
-      @database = SQLite3::Database.new(db_loc)
+    def initialize(db_loc='sqlite.db', options={})
+      @database = SQLite3::Database.new(db_loc, options)
     end
 
     def add_columns(tbl_name, col_names)

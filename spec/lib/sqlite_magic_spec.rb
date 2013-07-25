@@ -28,13 +28,18 @@ describe SqliteMagic do
       end
 
       it "should open up a Sqlite3 database with default name" do
-        SQLite3::Database.should_receive(:new).with('sqlite.db').and_return(@dummy_db)
+        SQLite3::Database.should_receive(:new).with('sqlite.db',{}).and_return(@dummy_db)
         connection = SqliteMagic::Connection.new
       end
 
       it "should use given db_name when setting up Sqlite3" do
-        SQLite3::Database.should_receive(:new).with('path/to/mynew.db').and_return(@dummy_db)
+        SQLite3::Database.should_receive(:new).with('path/to/mynew.db',{}).and_return(@dummy_db)
         connection = SqliteMagic::Connection.new('path/to/mynew.db')
+      end
+
+      it "should pass options when opening Sqlite3 db" do
+        SQLite3::Database.should_receive(:new).with('path/to/mynew.db', :foo => 'bar').and_return(@dummy_db)
+        connection = SqliteMagic::Connection.new('path/to/mynew.db', :foo => 'bar')
       end
 
       it "should store Sqlite3 database in @database instance variable" do
