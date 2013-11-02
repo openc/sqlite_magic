@@ -55,9 +55,9 @@ module SqliteMagic
     # This is an (expensive) convenience method to insert a row (for given unique keys), or if the row already exists
     #
     def insert_or_update(uniq_keys, values_hash, tbl_name='main_table')
-      field_names_as_symbol_string = values_hash.keys.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
-
-      sql_statement = "INSERT INTO #{tbl_name} (#{values_hash.keys.join(',')}) VALUES (#{field_names_as_symbol_string})"
+      all_field_names = values_hash.keys
+      field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
+      sql_statement = "INSERT INTO #{tbl_name} (#{all_field_names.join(',')}) VALUES (#{field_names_as_symbol_string})"
       database.execute(sql_statement, values_hash)
     rescue SQLite3::ConstraintException => e
       unique_key_constraint = uniq_keys.map { |k| "#{k}=:#{k}" }.join(' AND ')
@@ -65,9 +65,17 @@ module SqliteMagic
       sql_statement = "UPDATE #{tbl_name} SET #{update_keys} WHERE #{unique_key_constraint}"
       database.execute sql_statement, values_hash
     rescue SQLite3::SQLException => e
-      puts "Exception (#{e.inspect}) raised: #{sql_statement}" if verbose?
-      # defer to save_data, which can handle missing tables, columns etc
-      save_data(uniq_keys, values_hash, tbl_name)
+      puts "Exception (#{e.inspect}) raised" if verbose?
+      case e.message
+      when /no such table/
+        create_table(tbl_name, all_field_names, uniq_keys)
+        retry
+      when /has no column/
+        add_columns(tbl_name, all_field_names)
+        retry
+      else
+        raise e
+      end
     end
 
     # #save data into the database

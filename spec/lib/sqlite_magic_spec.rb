@@ -272,7 +272,7 @@ describe SqliteMagic do
 
       context 'and data already exists' do
         before do
-          @dummy_db.should_receive(:execute).with(/INSERT/, anything).and_raise(SQLite3::ConstraintException.new('constraint failed'))
+          @dummy_db.stub(:execute).with(/INSERT/, anything).and_raise(SQLite3::ConstraintException.new('constraint failed'))
           @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
         end
 
@@ -280,6 +280,7 @@ describe SqliteMagic do
           @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
           @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
         end
+
         context 'and no table name given' do
           before do
             @expected_update_query = "UPDATE main_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
@@ -291,23 +292,45 @@ describe SqliteMagic do
           end
         end
 
-      end
+        context 'and some columns do not exist' do
+          before do
+            @dummy_db.should_receive(:execute).with(@expected_query, @datum).
+                      and_raise(SQLite3::SQLException.new("table mynewtable has no column named foo") )
+            @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+          end
 
-      context 'and SQLite3::SQLException raised' do
-        before do
-          @dummy_db.stub(:execute) # default
-          # raise just once
-          @dummy_db.should_receive(:execute).
-                    and_raise(SQLite3::SQLException )
+          it 'should create missing fields using all field names and unique keys' do
+            @connection.should_receive(:add_columns).with('foo_table', [:foo,:foo2,:foo3, :foo4])
+            @dummy_db.stub(:execute).with(@expected_update_query, @datum)
+
+            @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
+          end
+
+          it 'should update data' do
+            @connection.stub(:add_columns)
+            @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
+
+            @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
+          end
         end
 
-        it 'should defer to save_data' do
-          @connection.stub(:create_table)
-          @connection.should_receive(:save_data).with(@unique_keys, @datum, 'foo_table')
-
-          @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
-        end
       end
+
+      # context 'and SQLite3::SQLException raised' do
+      #   before do
+      #     @dummy_db.stub(:execute) # default
+      #     # raise just once
+      #     @dummy_db.should_receive(:execute).
+      #               and_raise(SQLite3::SQLException )
+      #   end
+      #
+      #   it 'should defer to save_data' do
+      #     @connection.stub(:create_table)
+      #     @connection.should_receive(:save_data).with(@unique_keys, @datum, 'foo_table')
+      #
+      #     @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
+      #   end
+      # end
     end
 
     describe '#verbose?' do

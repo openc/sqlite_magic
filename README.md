@@ -25,6 +25,7 @@ TODO: Write usage instructions here
 
 ## Changes
 Allow options to be passed when initializing connection (which will be passed to Sqlite)
+insert\_or\_update no defers to #save\_data when hitting error (which caused a problem when missing field)
 
 ## Contributing
 
