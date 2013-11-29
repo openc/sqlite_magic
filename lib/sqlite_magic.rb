@@ -33,8 +33,8 @@ module SqliteMagic
 
     def create_table(tbl_name, col_names, unique_keys=nil)
       puts "Now creating new table: #{tbl_name}" if verbose?
-      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{col_names.join(',')}, UNIQUE (#{unique_keys.join(',')}))" :
-                            "CREATE TABLE #{tbl_name} (#{col_names.join(',')})"
+      query = unique_keys ? "CREATE TABLE `#{tbl_name}` (#{quote(col_names).join(',')}, UNIQUE (#{quote(unique_keys).join(',')}))" :
+                            "CREATE TABLE `#{tbl_name}` (#{quote(col_names).join(',')})"
       database.execute query
     end
 
@@ -62,31 +62,51 @@ module SqliteMagic
       save_data(uniq_keys, values_hash, tbl_name)
     end
 
+    def quote(arr)
+      arr.collect{|a| "`#{a}`"}
+    end
+
     # #save data into the database
     def save_data(uniq_keys, values_array, tbl_name)
+      retry_cnt = 1
       values_array = [values_array].flatten(1) # coerce to an array
       all_field_names = values_array.map(&:keys).flatten.uniq
-      all_field_names_as_string = all_field_names.join(',')
-      all_field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
+      all_field_names_as_string = quote(all_field_names).join(',')
+      all_field_names_as_symbol_string = Array.new(all_field_names.length,'?').join(',')#all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
       begin
         values_array.each do |values_hash|
           # mustn't use nil value in unique value due to fact that SQLite considers NULL values to be different from
           # each other in UNIQUE indexes. See http://www.sqlite.org/lang_createindex.html
           raise DatabaseError.new("Data has nil value for unique key. Unique keys are #{uniq_keys}. Offending data: #{values_hash.inspect}") unless uniq_keys.all?{ |k| values_hash[k] }
-          sql_query =  "INSERT OR REPLACE INTO #{tbl_name} (#{all_field_names_as_string}) VALUES (#{all_field_names_as_symbol_string})"
-          database.execute(sql_query, values_hash)
+          sql_query =  "INSERT OR REPLACE INTO `#{tbl_name}` (#{all_field_names_as_string}) VALUES (#{all_field_names_as_symbol_string})"
+          ## Need to find a lot better way to achieve quoted column values
+          tmp_val = []
+          all_field_names.each{|k|
+            tmp_val << values_hash[k]
+          }
+          database.execute(sql_query, tmp_val)
         end
       rescue SQLite3::SQLException => e
         puts "Exception (#{e.inspect}) raised" if verbose?
         case e.message
-        when /no such table/
-          create_table(tbl_name, all_field_names, uniq_keys)
-          retry
-        when /has no column/
-          add_columns(tbl_name, all_field_names)
-          retry
-        else
-          raise e
+          when /no such table/
+            create_table(tbl_name, all_field_names, uniq_keys)
+            retry
+          when /has no column/
+            add_columns(tbl_name, all_field_names)
+            retry
+          else
+            raise e
+        end
+      rescue SQLite3::BusyException => e
+        raise e if retry_cnt == 10
+        case e.message
+          when /database is locked/
+            retry_cnt = retry_cnt + 1
+            sleep(1)
+            retry
+          else
+            raise e
         end
       end
     end
