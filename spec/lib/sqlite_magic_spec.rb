@@ -214,9 +214,11 @@ describe SqliteMagic do
       end
 
       context 'and unique keys are given' do
-        it 'should add constraint for given keys' do
-          expected_query = "CREATE TABLE some_table (foo,bar,baz, UNIQUE (foo,baz))"
-          @dummy_db.should_receive(:execute).with(expected_query)
+        it 'should add constraint and index for given keys' do
+          expected_query_1 = "CREATE TABLE some_table (foo,bar,baz, UNIQUE (foo,baz))"
+          expected_query_2 = "CREATE UNIQUE INDEX IF NOT EXISTS foo_baz ON some_table (foo,baz)"
+          @dummy_db.should_receive(:execute).with(expected_query_1)
+          @dummy_db.should_receive(:execute).with(expected_query_2)
           @connection.create_table(:some_table, [:foo,:bar,:baz], [:foo,:baz])
         end
       end

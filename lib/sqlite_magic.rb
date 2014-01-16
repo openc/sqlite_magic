@@ -36,6 +36,11 @@ module SqliteMagic
       query = unique_keys ? "CREATE TABLE #{tbl_name} (#{col_names.join(',')}, UNIQUE (#{unique_keys.join(',')}))" :
                             "CREATE TABLE #{tbl_name} (#{col_names.join(',')})"
       database.execute query
+      if unique_keys && !unique_keys.empty?
+        query = "CREATE UNIQUE INDEX IF NOT EXISTS #{unique_keys.join('_')} " +
+          "ON #{tbl_name} (#{unique_keys.join(',')})"
+        database.execute query
+      end
     end
 
     def execute(query,data=nil)
@@ -181,4 +186,3 @@ module SqliteMagic
   # end
 
 end
-
