@@ -283,6 +283,14 @@ describe SqliteMagic do
           @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
         end
 
+        context "and :update_unique_keys specified in opts" do
+          it 'should update all columns including unique keys' do
+            @expected_update_query = "UPDATE foo_table SET foo=:foo, foo2=:foo2, foo3=:foo3, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
+            @connection.insert_or_update(@unique_keys, @datum, 'foo_table', :update_unique_keys => true)
+          end
+        end
+
         context 'and no table name given' do
           before do
             @expected_update_query = "UPDATE main_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"

@@ -59,15 +59,17 @@ module SqliteMagic
 
     # This is an (expensive) convenience method to insert a row (for given unique keys), or if the row already exists
     #
-    def insert_or_update(uniq_keys, values_hash, tbl_name='main_table')
+    def insert_or_update(uniq_keys, values_hash, tbl_name='main_table', opts={})
       all_field_names = values_hash.keys
       field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
       sql_statement = "INSERT INTO #{tbl_name} (#{all_field_names.join(',')}) VALUES (#{field_names_as_symbol_string})"
       database.execute(sql_statement, values_hash)
     rescue SQLite3::ConstraintException => e
       unique_key_constraint = uniq_keys.map { |k| "#{k}=:#{k}" }.join(' AND ')
-      update_keys = (values_hash.keys - uniq_keys).map { |k| "#{k}=:#{k}" }.join(', ')
-      sql_statement = "UPDATE #{tbl_name} SET #{update_keys} WHERE #{unique_key_constraint}"
+      update_keys = values_hash.keys
+      update_keys -= uniq_keys if !opts[:update_unique_keys]
+      update_sql = update_keys.map { |k| "#{k}=:#{k}" }.join(', ')
+      sql_statement = "UPDATE #{tbl_name} SET #{update_sql} WHERE #{unique_key_constraint}"
       database.execute sql_statement, values_hash
     rescue SQLite3::SQLException => e
       puts "Exception (#{e.inspect}) raised" if verbose?
