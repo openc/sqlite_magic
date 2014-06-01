@@ -11,15 +11,15 @@ module SqliteMagic
 
   class Connection
     attr_reader :database
-    def initialize(db_loc='sqlite.db')
-      @database = SQLite3::Database.new(db_loc)
+    def initialize(db_loc='sqlite.db', options={})
+      @database = SQLite3::Database.new(db_loc, options)
     end
 
     def add_columns(tbl_name, col_names)
       existing_cols = database.table_info(tbl_name).map{ |c| c['name'] }
       missing_cols = col_names.map(&:to_s) - existing_cols
       missing_cols.each do |col_name|
-        database.execute("ALTER TABLE #{tbl_name} ADD COLUMN #{col_name}")
+        database.execute("ALTER TABLE `#{tbl_name}` ADD COLUMN `#{col_name}`")
       end
     end
 
@@ -32,85 +32,114 @@ module SqliteMagic
     end
 
     def create_table(tbl_name, col_names, unique_keys=nil)
-      puts "Now creating new table: #{tbl_name}" if verbose?
-      query = unique_keys ? "CREATE TABLE `#{tbl_name}` (#{quote(col_names).join(',')}, UNIQUE (#{quote(unique_keys).join(',')}))" :
-                            "CREATE TABLE `#{tbl_name}` (#{quote(col_names).join(',')})"
+      puts "Now creating new table: `#{tbl_name}`" if verbose?
+      query = unique_keys ? "CREATE TABLE `#{tbl_name}` (#{col_names.map{|col_name| '`'+col_name.to_s+'`'}.join(',')}, UNIQUE (#{unique_keys.map{|unique_key| '`'+unique_key.to_s+'`'}.join(',')}))" :
+                            "CREATE TABLE `#{tbl_name}` (#{col_names.map{|col_name| '`'+col_name.to_s+'`'}.join(',')})"
       database.execute query
+      if unique_keys && !unique_keys.empty?
+        query = "CREATE UNIQUE INDEX IF NOT EXISTS #{unique_keys.map{|unique_key| '`'+unique_key.to_s+'`'}.join('_')} " +
+          "ON `#{tbl_name}` (#{unique_keys.map{|unique_key| '`'+unique_key.to_s+'`'}.join(',')})"
+        database.execute query
+      end
     end
 
     def execute(query,data=nil)
       raw_response = data ? database.execute2(query, data) : database.execute2(query)
       keys = raw_response.shift # get the keys
       raw_response.map{|e| Hash[keys.zip(e)] }
+    rescue SQLite3::SQLException => e
+      puts "Exception (#{e.inspect}) raised" if verbose?
+      case e.message
+      when /no such table/
+        raise NoSuchTable.new(e.message)
+      else
+        raise e
+      end
     end
 
     # This is an (expensive) convenience method to insert a row (for given unique keys), or if the row already exists
     #
-    def insert_or_update(uniq_keys, values_hash, tbl_name='ocdata')
-      field_names_as_symbol_string = values_hash.keys.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
-
-      sql_statement = "INSERT INTO #{tbl_name} (#{values_hash.keys.join(',')}) VALUES (#{field_names_as_symbol_string})"
-      database.execute(sql_statement, values_hash)
+    def insert_or_update(uniq_keys, values_hash, tbl_name='main_table', opts={})
+      #all_field_names = values_hash.keys
+      #field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
+      #sql_statement = "INSERT INTO `#{tbl_name}` (#{all_field_names.join(',')}) VALUES (#{field_names_as_symbol_string})"
+      #database.execute(sql_statement, values_hash)
+      sql_statement = "insert into `#{tbl_name}`(#{values_hash.keys.map{|key| '`'+key.to_s+'`'}.join(",")}) values(#{values_hash.length.times.map{'?'}.join(',')})"
+      database.execute(sql_statement, values_hash.values)
     rescue SQLite3::ConstraintException => e
-      unique_key_constraint = uniq_keys.map { |k| "#{k}=:#{k}" }.join(' AND ')
-      update_keys = (values_hash.keys - uniq_keys).map { |k| "#{k}=:#{k}" }.join(', ')
-      sql_statement = "UPDATE #{tbl_name} SET #{update_keys} WHERE #{unique_key_constraint}"
-      database.execute sql_statement, values_hash
+      unique_key_constraint = uniq_keys.map { |k| "`#{k}`=?" }.join(' AND ')
+      update_keys = values_hash.keys
+      update_keys -= uniq_keys if !opts[:update_unique_keys]
+      update_sql = update_keys.map { |k| "`#{k}`=?" }.join(', ')
+      sql_statement = "UPDATE `#{tbl_name}` SET #{update_sql} WHERE #{unique_key_constraint}"
+      database.execute(sql_statement, values_hash.values)
     rescue SQLite3::SQLException => e
-      puts "Exception (#{e.inspect}) raised: #{sql_statement}" if verbose?
-      # defer to save_data, which can handle missing tables, columns etc
-      save_data(uniq_keys, values_hash, tbl_name)
-    end
-
-    def quote(arr)
-      arr.collect{|a| "`#{a}`"}
-    end
-
-    # #save data into the database
-    def save_data(uniq_keys, values_array, tbl_name)
-      retry_cnt = 1
-      values_array = [values_array].flatten(1) # coerce to an array
-      all_field_names = values_array.map(&:keys).flatten.uniq
-      all_field_names_as_string = quote(all_field_names).join(',')
-      all_field_names_as_symbol_string = Array.new(all_field_names.length,'?').join(',')#all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
-      begin
-        values_array.each do |values_hash|
-          # mustn't use nil value in unique value due to fact that SQLite considers NULL values to be different from
-          # each other in UNIQUE indexes. See http://www.sqlite.org/lang_createindex.html
-          raise DatabaseError.new("Data has nil value for unique key. Unique keys are #{uniq_keys}. Offending data: #{values_hash.inspect}") unless uniq_keys.all?{ |k| values_hash[k] }
-          sql_query =  "INSERT OR REPLACE INTO `#{tbl_name}` (#{all_field_names_as_string}) VALUES (#{all_field_names_as_symbol_string})"
-          ## Need to find a lot better way to achieve quoted column values
-          tmp_val = []
-          all_field_names.each{|k|
-            tmp_val << values_hash[k]
-          }
-          database.execute(sql_query, tmp_val)
-        end
-      rescue SQLite3::SQLException => e
-        puts "Exception (#{e.inspect}) raised" if verbose?
-        case e.message
-          when /no such table/
-            create_table(tbl_name, all_field_names, uniq_keys)
-            retry
-          when /has no column/
-            add_columns(tbl_name, all_field_names)
-            retry
-          else
-            raise e
-        end
-      rescue SQLite3::BusyException => e
-        raise e if retry_cnt == 10
-        case e.message
-          when /database is locked/
-            retry_cnt = retry_cnt + 1
-            sleep(1)
-            retry
-          else
-            raise e
-        end
+      puts "Exception (#{e.inspect}) raised" if verbose?
+      case e.message
+      when /no such table/
+        create_table(tbl_name, values_hash.keys, uniq_keys)
+        retry
+      when /has no column/
+        add_columns(tbl_name, values_hash.keys)
+        retry
+      else
+        raise e
       end
     end
 
+    # #save data into the database
+    #def save_data(uniq_keys, values_array, tbl_name)
+    #  values_array = [values_array].flatten(1) # coerce to an array
+    #  all_field_names = values_array.map(&:keys).flatten.uniq
+    #  all_field_names_as_string = all_field_names.join(',')
+    #  all_field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
+    #  begin
+    #    values_array.each do |values_hash|
+    #      # mustn't use nil value in unique value due to fact that SQLite considers NULL values to be different from
+    #      # each other in UNIQUE indexes. See http://www.sqlite.org/lang_createindex.html
+    #      raise DatabaseError.new("Data has nil value for unique key. Unique keys are #{uniq_keys}. Offending data: #{values_hash.inspect}") unless uniq_keys.all?{ |k| values_hash[k] }
+    #      sql_query =  "INSERT OR REPLACE INTO `#{tbl_name}` (#{all_field_names_as_string}) VALUES (#{all_field_names_as_symbol_string})"
+    #      database.execute(sql_query, values_hash)
+    #    end
+    #  rescue SQLite3::SQLException => e
+    #    puts "Exception (#{e.inspect}) raised" if verbose?
+    #    case e.message
+    #    when /no such table/
+    #      create_table(tbl_name, all_field_names, uniq_keys)
+    #      retry
+    #    when /has no column/
+    #      add_columns(tbl_name, all_field_names)
+    #      retry
+    #    else
+    #      raise e
+    #    end
+    #  end
+    #end
+
+    def save_data(uniq_keys, values_array, tbl_name)
+      values_array = [values_array] if Hash === values_array
+      values_array.each do |values_hash|
+        begin
+          # mustn't use nil value in unique value due to fact that SQLite considers NULL values to be different from
+          # each other in UNIQUE indexes. See http://www.sqlite.org/lang_createindex.html
+          raise DatabaseError.new("Data has nil value for unique key. Unique keys are #{uniq_keys}. Offending data: #{values_hash.inspect}") unless uniq_keys.all?{ |k| values_hash[k] }
+          sql_query =  "INSERT OR REPLACE INTO `#{tbl_name}` (#{values_hash.keys.map{|key| '`'+key.to_s+'`'}.join(",")}) VALUES (#{values_hash.length.times.map{'?'}.join(',')})"
+          database.execute(sql_query, values_hash.values)
+        rescue SQLite3::SQLException => e
+          puts "Exception (#{e.inspect}) raised" if verbose?
+          case e.message
+          when /no such table/
+            create_table(tbl_name, values_hash.keys, uniq_keys)
+            retry
+          when /has no column/
+            add_columns(tbl_name, values_hash.keys)
+            retry
+          else
+            raise e
+          end
+        end
+      end
+    end
     # Convenience method that returns true if VERBOSE environmental variable set (at the moment whatever it is set to)
     def verbose?
       ENV['VERBOSE']

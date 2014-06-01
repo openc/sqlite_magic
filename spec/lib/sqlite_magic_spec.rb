@@ -28,13 +28,18 @@ describe SqliteMagic do
       end
 
       it "should open up a Sqlite3 database with default name" do
-        SQLite3::Database.should_receive(:new).with('sqlite.db').and_return(@dummy_db)
+        SQLite3::Database.should_receive(:new).with('sqlite.db',{}).and_return(@dummy_db)
         connection = SqliteMagic::Connection.new
       end
 
       it "should use given db_name when setting up Sqlite3" do
-        SQLite3::Database.should_receive(:new).with('path/to/mynew.db').and_return(@dummy_db)
+        SQLite3::Database.should_receive(:new).with('path/to/mynew.db',{}).and_return(@dummy_db)
         connection = SqliteMagic::Connection.new('path/to/mynew.db')
+      end
+
+      it "should pass options when opening Sqlite3 db" do
+        SQLite3::Database.should_receive(:new).with('path/to/mynew.db', :foo => 'bar').and_return(@dummy_db)
+        connection = SqliteMagic::Connection.new('path/to/mynew.db', :foo => 'bar')
       end
 
       it "should store Sqlite3 database in @database instance variable" do
@@ -87,20 +92,44 @@ describe SqliteMagic do
           @connection.execute('some query',nil)
         end
       end
+
+      context 'and table does not exist' do
+        before do
+          @dummy_db.stub(:execute2).
+                      and_raise(SQLite3::SQLException.new("no such table: `foo_table`") )
+        end
+
+        it 'should raise NoSuchTable exception' do
+          lambda { @connection.execute('some query') }.should raise_error(SqliteMagic::NoSuchTable)
+        end
+      end
+
+      context 'and other SQLite3 error raised' do
+        before do
+          @other_ex = SQLite3::SQLException.new("something else went wrong")
+          @dummy_db.stub(:execute2).
+                      and_raise(@other_ex)
+        end
+
+        it 'should raise exception' do
+          lambda { @connection.execute('some query') }.should raise_error(@other_ex)
+        end
+      end
     end
 
     describe '#save_data' do
       before do
         @connection = SqliteMagic::Connection.new
-        @data = [{:foo => 'bar', :foo2 => 'bar2', :foo3 => 'bar3'} , {:foo2 => 'baz2', :foo3 => 'baz3', :foo4 => 'baz4'}]
+        @data = [{:foo => 'bar', :foo2 => 'bar2', :foo3 => 'bar3'},
+                 {:foo2 => 'baz2', :foo3 => 'baz3', :foo4 => 'baz4'}]
         @unique_keys = [:foo2,:foo3]
-        @expected_query_1 = "INSERT OR REPLACE INTO `foo_table` (`foo`,`foo2`,`foo3`,`foo4`) VALUES (?,?,?,?)"
-        @expected_query_2 = "INSERT OR REPLACE INTO `foo_table` (`foo`,`foo2`,`foo3`,`foo4`) VALUES (?,?,?,?)"
+        @expected_query_1 = "INSERT OR REPLACE INTO `foo_table` (`foo`,`foo2`,`foo3`) VALUES (?,?,?)"
+        @expected_query_2 = "INSERT OR REPLACE INTO `foo_table` (`foo2`,`foo3`,`foo4`) VALUES (?,?,?)"
       end
 
       it 'should insert each data hash using all given field names' do
-        @dummy_db.should_receive(:execute).with(@expected_query_1, [@data[0][:foo],@data[0][:foo2],@data[0][:foo3],@data[0][:foo4]])
-        @dummy_db.should_receive(:execute).with(@expected_query_2, [@data[1][:foo],@data[1][:foo2],@data[1][:foo3],@data[1][:foo4]])
+        @dummy_db.should_receive(:execute).with(@expected_query_1, @data[0].values)
+        @dummy_db.should_receive(:execute).with(@expected_query_2, @data[1].values)
 
         @connection.save_data(@unique_keys, @data, 'foo_table')
       end
@@ -108,59 +137,48 @@ describe SqliteMagic do
       context 'and datum is a single hash' do
         it 'should save the hash' do
           @expected_query_1 = "INSERT OR REPLACE INTO `foo_table` (`foo`,`foo2`,`foo3`) VALUES (?,?,?)"
-          @dummy_db.should_receive(:execute).with(@expected_query_1, [@data[0][:foo],@data[0][:foo2],@data[0][:foo3]])
-          @connection.save_data(@unique_keys, @data.first, 'foo_table')
+          @dummy_db.should_receive(:execute).with(@expected_query_1, @data[0].values)
+          @connection.save_data(@unique_keys, @data[0], 'foo_table')
         end
       end
-
-      context 'and datum is a single hash with keys having spaces' do
-        it 'should insert data with column names having spaces' do
-          @data = {'foo 1' => 'bar', 'foo 2' => 'bar2', 'foo 3'=> 'bar 3','foo 4'=>'bar 4'}
-          @expected_query_3 = "INSERT OR REPLACE INTO `foo_table` (`foo 1`,`foo 2`,`foo 3`,`foo 4`) VALUES (?,?,?,?)"
-          @dummy_db.should_receive(:execute).with(@expected_query_3, [@data['foo 1'],@data['foo 2'],@data['foo 3'],@data['foo 4']])
-          @connection.save_data(['foo 2','foo 3'], @data, 'foo_table')
-        end
-      end
-
 
       context 'and table does not exist' do
         before do
           @dummy_db.stub(:execute) # default
           # raise just once
-          @dummy_db.should_receive(:execute).with(@expected_query_1, [@data[0][:foo],@data[0][:foo2],@data[0][:foo3],@data[0][:foo4]]).
-                    and_raise(SQLite3::SQLException.new("no such table: foo_table") )
+          @dummy_db.should_receive(:execute).with(@expected_query_1, @data[0].values).
+                    and_raise(SQLite3::SQLException.new("no such table: `foo_table`") )
         end
 
         it 'should create table using all field names and unique keys' do
-          @connection.should_receive(:create_table).with('foo_table', [:foo,:foo2,:foo3, :foo4], @unique_keys)
+          @connection.should_receive(:create_table).with('foo_table', [:foo,:foo2,:foo3], @unique_keys)
           @connection.save_data(@unique_keys, @data, 'foo_table')
         end
 
         it 'should insert data' do
           @connection.stub(:create_table)
-          @dummy_db.should_receive(:execute).with(@expected_query_2, [@data[1][:foo],@data[1][:foo2],@data[1][:foo3],@data[1][:foo4]])
+          @dummy_db.should_receive(:execute).with(@expected_query_2, @data[1].values)
 
           @connection.save_data(@unique_keys, @data, 'foo_table')
         end
-
       end
 
       context 'and some columns do not exist' do
         before do
           @dummy_db.stub(:execute) # default
           # raise just once
-          @dummy_db.should_receive(:execute).with(@expected_query_1, [@data[0][:foo],@data[0][:foo2],@data[0][:foo3],@data[0][:foo4]]).
+          @dummy_db.should_receive(:execute).with(@expected_query_1, @data[0].values).
                     and_raise(SQLite3::SQLException.new("table mynewtable has no column named foo") )
         end
 
         it 'should create missing fields using all field names and unique keys' do
-          @connection.should_receive(:add_columns).with('foo_table', [:foo,:foo2,:foo3, :foo4])
+          @connection.should_receive(:add_columns).with('foo_table', [:foo,:foo2,:foo3])
           @connection.save_data(@unique_keys, @data, 'foo_table')
         end
 
         it 'should insert data' do
           @connection.stub(:add_columns)
-          @dummy_db.should_receive(:execute).with(@expected_query_2, [@data[1][:foo],@data[1][:foo2],@data[1][:foo3],@data[1][:foo4]])
+          @dummy_db.should_receive(:execute).with(@expected_query_2, @data[1].values)
 
           @connection.save_data(@unique_keys, @data, 'foo_table')
         end
@@ -170,7 +188,7 @@ describe SqliteMagic do
         before do
           @dummy_db.stub(:execute) # default
           # raise just once
-          @dummy_db.should_receive(:execute).with(@expected_query_1, [@data[0][:foo],@data[0][:foo2],@data[0][:foo3],@data[0][:foo4]]).
+          @dummy_db.should_receive(:execute).with(@expected_query_1, @data[0].values).
                     and_raise(SQLite3::SQLException.new("something else has gone wrong") )
         end
 
@@ -190,21 +208,17 @@ describe SqliteMagic do
 
     describe '#create_table' do
       it 'should create default table using given field names' do
-        expected_query1 = "CREATE TABLE `some_table` (`foo`,`bar`,`baz`)"
-        @dummy_db.should_receive(:execute).with(expected_query1)
-        @connection.create_table(:some_table, [:foo,:bar,:baz])
-      end
-      
-      it 'should create defailt table using given field names with spaces' do
-        expected_query = "CREATE TABLE `some_table` (`foo 1`,`bar 1`,`baz 1`)"
+        expected_query = "CREATE TABLE `some_table` (`foo`,`bar`,`baz`)"
         @dummy_db.should_receive(:execute).with(expected_query)
-        @connection.create_table('some_table', ['foo 1','bar 1','baz 1'])
+        @connection.create_table(:some_table, [:foo,:bar,:baz])
       end
 
       context 'and unique keys are given' do
-        it 'should add constraint for given keys' do
-          expected_query = "CREATE TABLE `some_table` (`foo`,`bar`,`baz`, UNIQUE (`foo`,`baz`))"
-          @dummy_db.should_receive(:execute).with(expected_query)
+        it 'should add constraint and index for given keys' do
+          expected_query_1 = "CREATE TABLE `some_table` (`foo`,`bar`,`baz`, UNIQUE (`foo`,`baz`))"
+          expected_query_2 = "CREATE UNIQUE INDEX IF NOT EXISTS `foo`_`baz` ON `some_table` (`foo`,`baz`)"
+          @dummy_db.should_receive(:execute).with(expected_query_1)
+          @dummy_db.should_receive(:execute).with(expected_query_2)
           @connection.create_table(:some_table, [:foo,:bar,:baz], [:foo,:baz])
         end
       end
@@ -224,8 +238,8 @@ describe SqliteMagic do
 
       it 'should add columns that arent there already' do
         @dummy_db.stub(:table_info).and_return(@table_info)
-        @dummy_db.should_receive(:execute).with('ALTER TABLE foo_table ADD COLUMN foo')
-        @dummy_db.should_receive(:execute).with('ALTER TABLE foo_table ADD COLUMN baz')
+        @dummy_db.should_receive(:execute).with('ALTER TABLE `foo_table` ADD COLUMN `foo`')
+        @dummy_db.should_receive(:execute).with('ALTER TABLE `foo_table` ADD COLUMN `baz`')
         @connection.add_columns(:foo_table, [:foo,:bar,:baz])
       end
     end
@@ -234,11 +248,11 @@ describe SqliteMagic do
       before do
         @datum = {:foo => 'bar', :foo2 => 'bar2', :foo3 => 'bar3', :foo4 => 'bar4'}
         @unique_keys = [:foo2,:foo3]
-        @expected_query = "INSERT INTO foo_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+        @expected_query = "insert into `foo_table`(`foo`,`foo2`,`foo3`,`foo4`) values(?,?,?,?)"
       end
 
       it 'should insert data' do
-        @dummy_db.should_receive(:execute).with(@expected_query, @datum)
+        @dummy_db.should_receive(:execute).with(@expected_query, @datum.values)
         @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
       end
 
@@ -249,53 +263,84 @@ describe SqliteMagic do
 
       context 'and no table name given' do
         before do
-          @expected_query = "INSERT INTO ocdata (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+          @expected_query = "insert into `main_table`(`foo`,`foo2`,`foo3`,`foo4`) values(?,?,?,?)"
         end
 
-        it 'should use ocdata table by default' do
-          @dummy_db.should_receive(:execute).with(@expected_query, @datum)
+        it 'should use main_table table by default' do
+          @dummy_db.should_receive(:execute).with(@expected_query, @datum.values)
           @connection.insert_or_update(@unique_keys, @datum)
         end
       end
 
       context 'and data already exists' do
         before do
-          @dummy_db.should_receive(:execute).with(/INSERT/, anything).and_raise(SQLite3::ConstraintException.new('constraint failed'))
-          @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+          @dummy_db.stub(:execute).with(/insert/, anything).and_raise(SQLite3::ConstraintException.new('constraint failed'))
+          @expected_update_query = "UPDATE `foo_table` SET `foo`=?, `foo4`=? WHERE `foo2`=? AND `foo3`=?"
         end
 
         it 'should update given columns dependent on unique keys' do
-          @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
+          @dummy_db.should_receive(:execute).with(@expected_update_query, @datum.values)
           @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
         end
+
+        context "and :update_unique_keys specified in opts" do
+          it 'should update all columns including unique keys' do
+            @expected_update_query = "UPDATE `foo_table` SET `foo`=?, `foo2`=?, `foo3`=?, `foo4`=? WHERE `foo2`=? AND `foo3`=?"
+            @dummy_db.should_receive(:execute).with(@expected_update_query, @datum.values)
+            @connection.insert_or_update(@unique_keys, @datum, 'foo_table', :update_unique_keys => true)
+          end
+        end
+
         context 'and no table name given' do
           before do
-            @expected_update_query = "UPDATE ocdata SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE `main_table` SET `foo`=?, `foo4`=? WHERE `foo2`=? AND `foo3`=?"
           end
 
-          it 'should use ocdata table by default' do
-            @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
+          it 'should use main_table table by default' do
+            @dummy_db.should_receive(:execute).with(@expected_update_query, @datum.values)
             @connection.insert_or_update(@unique_keys, @datum)
           end
         end
 
-      end
+        context 'and some columns do not exist' do
+          before do
+            @dummy_db.should_receive(:execute).with(@expected_query, @datum.values).
+                      and_raise(SQLite3::SQLException.new("table mynewtable has no column named foo") )
+            @expected_update_query = "UPDATE `foo_table` SET `foo`=?, `foo4`=? WHERE `foo2`=? AND `foo3`=?"
+          end
 
-      context 'and SQLite3::SQLException raised' do
-        before do
-          @dummy_db.stub(:execute) # default
-          # raise just once
-          @dummy_db.should_receive(:execute).
-                    and_raise(SQLite3::SQLException )
+          it 'should create missing fields using all field names and unique keys' do
+            @connection.should_receive(:add_columns).with('foo_table', [:foo,:foo2,:foo3, :foo4])
+            @dummy_db.stub(:execute).with(@expected_update_query, @datum.values)
+
+            @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
+          end
+
+          it 'should update data' do
+            @connection.stub(:add_columns)
+            @dummy_db.should_receive(:execute).with(@expected_update_query, @datum.values)
+
+            @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
+          end
         end
 
-        it 'should defer to save_data' do
-          @connection.stub(:create_table)
-          @connection.should_receive(:save_data).with(@unique_keys, @datum, 'foo_table')
-
-          @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
-        end
       end
+
+      # context 'and SQLite3::SQLException raised' do
+      #   before do
+      #     @dummy_db.stub(:execute) # default
+      #     # raise just once
+      #     @dummy_db.should_receive(:execute).
+      #               and_raise(SQLite3::SQLException )
+      #   end
+      #
+      #   it 'should defer to save_data' do
+      #     @connection.stub(:create_table)
+      #     @connection.should_receive(:save_data).with(@unique_keys, @datum, 'foo_table')
+      #
+      #     @connection.insert_or_update(@unique_keys, @datum, 'foo_table')
+      #   end
+      # end
     end
 
     describe '#verbose?' do
@@ -349,3 +394,4 @@ describe SqliteMagic do
   #
 
 end
+
