@@ -12,7 +12,9 @@ module SqliteMagic
   class Connection
     attr_reader :database
     def initialize(db_loc='sqlite.db', options={})
+      busy_timeout = options.delete(:busy_timeout)
       @database = SQLite3::Database.new(db_loc, options)
+      @database.busy_timeout = busy_timeout if busy_timeout
     end
 
     def add_columns(tbl_name, col_names)

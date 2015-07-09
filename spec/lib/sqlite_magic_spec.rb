@@ -46,6 +46,13 @@ describe SqliteMagic do
         connection = SqliteMagic::Connection.new
         connection.instance_variable_get(:@database).should == @dummy_db
       end
+
+      it "should set busy_timeout if passed as options when opening Sqlite3 db" do
+        SQLite3::Database.should_receive(:new).with('path/to/mynew.db', {}).and_return(@dummy_db)
+        @dummy_db.should_receive(:busy_timeout=).with(12345)
+        connection = SqliteMagic::Connection.new('path/to/mynew.db', :busy_timeout => 12345)
+      end
+
     end
 
     it "should have #database accessor" do
