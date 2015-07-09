@@ -352,12 +352,12 @@ describe SqliteMagic do
 
     describe '#verbose?' do
       it 'should return false if ENV["VERBOSE"] not set' do
-        @connection.verbose?.should be_false
+        @connection.verbose?.should be_falsy
       end
 
-      it 'should return false if ENV["VERBOSE"] set' do
+      it 'should return true if ENV["VERBOSE"] set' do
         ENV["VERBOSE"] = 'foo'
-        @connection.verbose?.should be_true
+        @connection.verbose?.should be_truthy
         ENV["VERBOSE"] = nil # reset
       end
     end
