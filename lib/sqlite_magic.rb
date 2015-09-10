@@ -21,7 +21,7 @@ module SqliteMagic
       existing_cols = database.table_info(tbl_name).map{ |c| c['name'] }
       missing_cols = col_names.map(&:to_s) - existing_cols
       missing_cols.each do |col_name|
-        database.execute("ALTER TABLE #{tbl_name} ADD COLUMN #{col_name}")
+        database.execute("ALTER TABLE #{tbl_name} ADD COLUMN '#{col_name}'")
       end
     end
 

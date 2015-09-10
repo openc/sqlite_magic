@@ -245,8 +245,8 @@ describe SqliteMagic do
 
       it 'should add columns that arent there already' do
         @dummy_db.stub(:table_info).and_return(@table_info)
-        @dummy_db.should_receive(:execute).with('ALTER TABLE foo_table ADD COLUMN foo')
-        @dummy_db.should_receive(:execute).with('ALTER TABLE foo_table ADD COLUMN baz')
+        @dummy_db.should_receive(:execute).with("ALTER TABLE foo_table ADD COLUMN 'foo'")
+        @dummy_db.should_receive(:execute).with("ALTER TABLE foo_table ADD COLUMN 'baz'")
         @connection.add_columns(:foo_table, [:foo,:bar,:baz])
       end
     end
