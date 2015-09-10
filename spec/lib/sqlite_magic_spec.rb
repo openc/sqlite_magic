@@ -255,7 +255,7 @@ describe SqliteMagic do
       before do
         @datum = {:foo => 'bar', :foo2 => 'bar2', :foo3 => 'bar3', :foo4 => 'bar4'}
         @unique_keys = [:foo2,:foo3]
-        @expected_query = "INSERT INTO foo_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+        @expected_query = "INSERT INTO foo_table ('foo','foo2','foo3','foo4') VALUES (:foo,:foo2,:foo3,:foo4)"
       end
 
       it 'should insert data' do
@@ -270,7 +270,7 @@ describe SqliteMagic do
 
       context 'and no table name given' do
         before do
-          @expected_query = "INSERT INTO main_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+          @expected_query = "INSERT INTO main_table ('foo','foo2','foo3','foo4') VALUES (:foo,:foo2,:foo3,:foo4)"
         end
 
         it 'should use main_table table by default' do
@@ -282,7 +282,7 @@ describe SqliteMagic do
       context 'and data already exists' do
         before do
           @dummy_db.stub(:execute).with(/INSERT/, anything).and_raise(SQLite3::ConstraintException.new('constraint failed'))
-          @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+          @expected_update_query = "UPDATE foo_table SET 'foo'=:foo, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
         end
 
         it 'should update given columns dependent on unique keys' do
@@ -292,7 +292,7 @@ describe SqliteMagic do
 
         context "and :update_unique_keys specified in opts" do
           it 'should update all columns including unique keys' do
-            @expected_update_query = "UPDATE foo_table SET foo=:foo, foo2=:foo2, foo3=:foo3, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE foo_table SET 'foo'=:foo, 'foo2'=:foo2, 'foo3'=:foo3, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
             @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
             @connection.insert_or_update(@unique_keys, @datum, 'foo_table', :update_unique_keys => true)
           end
@@ -300,7 +300,7 @@ describe SqliteMagic do
 
         context 'and no table name given' do
           before do
-            @expected_update_query = "UPDATE main_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE main_table SET 'foo'=:foo, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
           end
 
           it 'should use main_table table by default' do
@@ -313,7 +313,7 @@ describe SqliteMagic do
           before do
             @dummy_db.should_receive(:execute).with(@expected_query, @datum).
                       and_raise(SQLite3::SQLException.new("table mynewtable has no column named foo") )
-            @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE foo_table SET 'foo'=:foo, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
           end
 
           it 'should create missing fields using all field names and unique keys' do
