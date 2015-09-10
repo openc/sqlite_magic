@@ -39,7 +39,7 @@ module SqliteMagic
                             "CREATE TABLE #{tbl_name} (#{format_field_names_as_string(col_names)})"
       database.execute query
       if unique_keys && !unique_keys.empty?
-        query = "CREATE UNIQUE INDEX IF NOT EXISTS #{unique_keys.join('_')} " +
+        query = "CREATE UNIQUE INDEX IF NOT EXISTS '#{unique_keys.join('_')}' " +
           "ON #{tbl_name} (#{format_field_names_as_string(unique_keys)})"
         database.execute query
       end
