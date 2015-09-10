@@ -35,12 +35,12 @@ module SqliteMagic
 
     def create_table(tbl_name, col_names, unique_keys=nil)
       puts "Now creating new table: #{tbl_name}" if verbose?
-      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{col_names.map{ |k| "'#{k}'" }.join(',')}, UNIQUE (#{unique_keys.map{ |k| "'#{k}'" }.join(',')}))" :
-                            "CREATE TABLE #{tbl_name} (#{col_names.map{ |k| "'#{k}'" }.join(',')})"
+      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{format_field_names_as_string(col_names)}, UNIQUE (#{format_field_names_as_string(unique_keys)}))" :
+                            "CREATE TABLE #{tbl_name} (#{format_field_names_as_string(col_names)})"
       database.execute query
       if unique_keys && !unique_keys.empty?
         query = "CREATE UNIQUE INDEX IF NOT EXISTS #{unique_keys.join('_')} " +
-          "ON #{tbl_name} (#{unique_keys.map{ |k| "'#{k}'" }.join(',')})"
+          "ON #{tbl_name} (#{format_field_names_as_string(unique_keys)})"
         database.execute query
       end
     end
@@ -64,7 +64,7 @@ module SqliteMagic
     def insert_or_update(uniq_keys, values_hash, tbl_name='main_table', opts={})
       all_field_names = values_hash.keys
       field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
-      sql_statement = "INSERT INTO #{tbl_name} (#{all_field_names.map{ |k| "'#{k}'" }.join(',')}) VALUES (#{field_names_as_symbol_string})"
+      sql_statement = "INSERT INTO #{tbl_name} (#{format_field_names_as_string(all_field_names)}) VALUES (#{field_names_as_symbol_string})"
       database.execute(sql_statement, values_hash)
     rescue SQLite3::ConstraintException => e
       unique_key_constraint = uniq_keys.map { |k| "'#{k}'=:#{k}" }.join(' AND ')
@@ -91,7 +91,7 @@ module SqliteMagic
     def save_data(uniq_keys, values_array, tbl_name)
       values_array = [values_array].flatten(1) # coerce to an array
       all_field_names = values_array.map(&:keys).flatten.uniq
-      all_field_names_as_string = all_field_names.map{ |k| "'#{k}'" }.join(',')
+      all_field_names_as_string = format_field_names_as_string(all_field_names)
       all_field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
       begin
         values_array.each do |values_hash|
@@ -174,6 +174,13 @@ module SqliteMagic
     #     end
     #     return jdata
     # end
+
+    private
+
+    # Correctly formats an array of field names ready for SQL statements
+    def format_field_names_as_string(array)
+      array.map{ |k| "'#{k}'" }.join(',')
+    end
   end
 
 
