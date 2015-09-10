@@ -35,12 +35,12 @@ module SqliteMagic
 
     def create_table(tbl_name, col_names, unique_keys=nil)
       puts "Now creating new table: #{tbl_name}" if verbose?
-      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{col_names.join(',')}, UNIQUE (#{unique_keys.join(',')}))" :
-                            "CREATE TABLE #{tbl_name} (#{col_names.join(',')})"
+      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{col_names.map{ |k| "'#{k}'" }.join(',')}, UNIQUE (#{unique_keys.map{ |k| "'#{k}'" }.join(',')}))" :
+                            "CREATE TABLE #{tbl_name} (#{col_names.map{ |k| "'#{k}'" }.join(',')})"
       database.execute query
       if unique_keys && !unique_keys.empty?
         query = "CREATE UNIQUE INDEX IF NOT EXISTS #{unique_keys.join('_')} " +
-          "ON #{tbl_name} (#{unique_keys.join(',')})"
+          "ON #{tbl_name} (#{unique_keys.map{ |k| "'#{k}'" }.join(',')})"
         database.execute query
       end
     end
@@ -91,7 +91,7 @@ module SqliteMagic
     def save_data(uniq_keys, values_array, tbl_name)
       values_array = [values_array].flatten(1) # coerce to an array
       all_field_names = values_array.map(&:keys).flatten.uniq
-      all_field_names_as_string = all_field_names.join(',')
+      all_field_names_as_string = all_field_names.map{ |k| "'#{k}'" }.join(',')
       all_field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
       begin
         values_array.each do |values_hash|
