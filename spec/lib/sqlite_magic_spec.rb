@@ -130,8 +130,8 @@ describe SqliteMagic do
         @data = [{:foo => 'bar', :foo2 => 'bar2', :foo3 => 'bar3'},
                  {:foo2 => 'baz2', :foo3 => 'baz3', :foo4 => 'baz4'}]
         @unique_keys = [:foo2,:foo3]
-        @expected_query_1 = "INSERT OR REPLACE INTO foo_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
-        @expected_query_2 = "INSERT OR REPLACE INTO foo_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+        @expected_query_1 = "INSERT OR REPLACE INTO foo_table ('foo','foo2','foo3','foo4') VALUES (:foo,:foo2,:foo3,:foo4)"
+        @expected_query_2 = "INSERT OR REPLACE INTO foo_table ('foo','foo2','foo3','foo4') VALUES (:foo,:foo2,:foo3,:foo4)"
       end
 
       it 'should insert each data hash using all given field names' do
@@ -143,7 +143,7 @@ describe SqliteMagic do
 
       context 'and datum is a single hash' do
         it 'should save the hash' do
-          @expected_query_1 = "INSERT OR REPLACE INTO foo_table (foo,foo2,foo3) VALUES (:foo,:foo2,:foo3)"
+          @expected_query_1 = "INSERT OR REPLACE INTO foo_table ('foo','foo2','foo3') VALUES (:foo,:foo2,:foo3)"
           @dummy_db.should_receive(:execute).with(@expected_query_1, @data.first)
           @connection.save_data(@unique_keys, @data.first, 'foo_table')
         end
@@ -215,15 +215,15 @@ describe SqliteMagic do
 
     describe '#create_table' do
       it 'should create default table using given field names' do
-        expected_query = "CREATE TABLE some_table (foo,bar,baz)"
+        expected_query = "CREATE TABLE some_table ('foo','bar','baz')"
         @dummy_db.should_receive(:execute).with(expected_query)
         @connection.create_table(:some_table, [:foo,:bar,:baz])
       end
 
       context 'and unique keys are given' do
         it 'should add constraint and index for given keys' do
-          expected_query_1 = "CREATE TABLE some_table (foo,bar,baz, UNIQUE (foo,baz))"
-          expected_query_2 = "CREATE UNIQUE INDEX IF NOT EXISTS foo_baz ON some_table (foo,baz)"
+          expected_query_1 = "CREATE TABLE some_table ('foo','bar','baz', UNIQUE ('foo','baz'))"
+          expected_query_2 = "CREATE UNIQUE INDEX IF NOT EXISTS 'foo_baz' ON some_table ('foo','baz')"
           @dummy_db.should_receive(:execute).with(expected_query_1)
           @dummy_db.should_receive(:execute).with(expected_query_2)
           @connection.create_table(:some_table, [:foo,:bar,:baz], [:foo,:baz])
@@ -245,8 +245,8 @@ describe SqliteMagic do
 
       it 'should add columns that arent there already' do
         @dummy_db.stub(:table_info).and_return(@table_info)
-        @dummy_db.should_receive(:execute).with('ALTER TABLE foo_table ADD COLUMN foo')
-        @dummy_db.should_receive(:execute).with('ALTER TABLE foo_table ADD COLUMN baz')
+        @dummy_db.should_receive(:execute).with("ALTER TABLE foo_table ADD COLUMN 'foo'")
+        @dummy_db.should_receive(:execute).with("ALTER TABLE foo_table ADD COLUMN 'baz'")
         @connection.add_columns(:foo_table, [:foo,:bar,:baz])
       end
     end
@@ -255,7 +255,7 @@ describe SqliteMagic do
       before do
         @datum = {:foo => 'bar', :foo2 => 'bar2', :foo3 => 'bar3', :foo4 => 'bar4'}
         @unique_keys = [:foo2,:foo3]
-        @expected_query = "INSERT INTO foo_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+        @expected_query = "INSERT INTO foo_table ('foo','foo2','foo3','foo4') VALUES (:foo,:foo2,:foo3,:foo4)"
       end
 
       it 'should insert data' do
@@ -270,7 +270,7 @@ describe SqliteMagic do
 
       context 'and no table name given' do
         before do
-          @expected_query = "INSERT INTO main_table (foo,foo2,foo3,foo4) VALUES (:foo,:foo2,:foo3,:foo4)"
+          @expected_query = "INSERT INTO main_table ('foo','foo2','foo3','foo4') VALUES (:foo,:foo2,:foo3,:foo4)"
         end
 
         it 'should use main_table table by default' do
@@ -282,7 +282,7 @@ describe SqliteMagic do
       context 'and data already exists' do
         before do
           @dummy_db.stub(:execute).with(/INSERT/, anything).and_raise(SQLite3::ConstraintException.new('constraint failed'))
-          @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+          @expected_update_query = "UPDATE foo_table SET 'foo'=:foo, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
         end
 
         it 'should update given columns dependent on unique keys' do
@@ -292,7 +292,7 @@ describe SqliteMagic do
 
         context "and :update_unique_keys specified in opts" do
           it 'should update all columns including unique keys' do
-            @expected_update_query = "UPDATE foo_table SET foo=:foo, foo2=:foo2, foo3=:foo3, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE foo_table SET 'foo'=:foo, 'foo2'=:foo2, 'foo3'=:foo3, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
             @dummy_db.should_receive(:execute).with(@expected_update_query, @datum)
             @connection.insert_or_update(@unique_keys, @datum, 'foo_table', :update_unique_keys => true)
           end
@@ -300,7 +300,7 @@ describe SqliteMagic do
 
         context 'and no table name given' do
           before do
-            @expected_update_query = "UPDATE main_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE main_table SET 'foo'=:foo, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
           end
 
           it 'should use main_table table by default' do
@@ -313,7 +313,7 @@ describe SqliteMagic do
           before do
             @dummy_db.should_receive(:execute).with(@expected_query, @datum).
                       and_raise(SQLite3::SQLException.new("table mynewtable has no column named foo") )
-            @expected_update_query = "UPDATE foo_table SET foo=:foo, foo4=:foo4 WHERE foo2=:foo2 AND foo3=:foo3"
+            @expected_update_query = "UPDATE foo_table SET 'foo'=:foo, 'foo4'=:foo4 WHERE 'foo2'=:foo2 AND 'foo3'=:foo3"
           end
 
           it 'should create missing fields using all field names and unique keys' do

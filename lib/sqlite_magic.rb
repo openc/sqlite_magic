@@ -21,7 +21,7 @@ module SqliteMagic
       existing_cols = database.table_info(tbl_name).map{ |c| c['name'] }
       missing_cols = col_names.map(&:to_s) - existing_cols
       missing_cols.each do |col_name|
-        database.execute("ALTER TABLE #{tbl_name} ADD COLUMN #{col_name}")
+        database.execute("ALTER TABLE #{tbl_name} ADD COLUMN '#{col_name}'")
       end
     end
 
@@ -35,12 +35,12 @@ module SqliteMagic
 
     def create_table(tbl_name, col_names, unique_keys=nil)
       puts "Now creating new table: #{tbl_name}" if verbose?
-      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{col_names.join(',')}, UNIQUE (#{unique_keys.join(',')}))" :
-                            "CREATE TABLE #{tbl_name} (#{col_names.join(',')})"
+      query = unique_keys ? "CREATE TABLE #{tbl_name} (#{format_field_names_as_string(col_names)}, UNIQUE (#{format_field_names_as_string(unique_keys)}))" :
+                            "CREATE TABLE #{tbl_name} (#{format_field_names_as_string(col_names)})"
       database.execute query
       if unique_keys && !unique_keys.empty?
-        query = "CREATE UNIQUE INDEX IF NOT EXISTS #{unique_keys.join('_')} " +
-          "ON #{tbl_name} (#{unique_keys.join(',')})"
+        query = "CREATE UNIQUE INDEX IF NOT EXISTS '#{unique_keys.join('_')}' " +
+          "ON #{tbl_name} (#{format_field_names_as_string(unique_keys)})"
         database.execute query
       end
     end
@@ -64,13 +64,13 @@ module SqliteMagic
     def insert_or_update(uniq_keys, values_hash, tbl_name='main_table', opts={})
       all_field_names = values_hash.keys
       field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
-      sql_statement = "INSERT INTO #{tbl_name} (#{all_field_names.join(',')}) VALUES (#{field_names_as_symbol_string})"
+      sql_statement = "INSERT INTO #{tbl_name} (#{format_field_names_as_string(all_field_names)}) VALUES (#{field_names_as_symbol_string})"
       database.execute(sql_statement, values_hash)
     rescue SQLite3::ConstraintException => e
-      unique_key_constraint = uniq_keys.map { |k| "#{k}=:#{k}" }.join(' AND ')
+      unique_key_constraint = uniq_keys.map { |k| "'#{k}'=:#{k}" }.join(' AND ')
       update_keys = values_hash.keys
       update_keys -= uniq_keys if !opts[:update_unique_keys]
-      update_sql = update_keys.map { |k| "#{k}=:#{k}" }.join(', ')
+      update_sql = update_keys.map { |k| "'#{k}'=:#{k}" }.join(', ')
       sql_statement = "UPDATE #{tbl_name} SET #{update_sql} WHERE #{unique_key_constraint}"
       database.execute sql_statement, values_hash
     rescue SQLite3::SQLException => e
@@ -91,7 +91,7 @@ module SqliteMagic
     def save_data(uniq_keys, values_array, tbl_name)
       values_array = [values_array].flatten(1) # coerce to an array
       all_field_names = values_array.map(&:keys).flatten.uniq
-      all_field_names_as_string = all_field_names.join(',')
+      all_field_names_as_string = format_field_names_as_string(all_field_names)
       all_field_names_as_symbol_string = all_field_names.map{ |k| ":#{k}" }.join(',') # need to appear as symbols
       begin
         values_array.each do |values_hash|
@@ -174,6 +174,13 @@ module SqliteMagic
     #     end
     #     return jdata
     # end
+
+    private
+
+    # Correctly formats an array of field names ready for SQL statements
+    def format_field_names_as_string(array)
+      array.map{ |k| "'#{k}'" }.join(',')
+    end
   end
 
 
